@@ -1,0 +1,119 @@
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+}
+
+plugins {
+    id 'com.github.johnrengelman.shadow' version '7.1.2'
+    id 'kr.entree.spigradle' version '2.4.3'
+    id 'io.freefair.lombok' version '6.6.1'
+    id 'java'
+    id 'jacoco'
+    id 'idea'
+}
+
+apply from: "$rootDir/gradle/jacoco.gradle"
+apply from: "$rootDir/gradle/publish.gradle"
+
+if (project.hasProperty("local_script")) {
+    apply from: file(local_script + "/build.local.gradle")
+}
+
+sourceCompatibility = 17
+targetCompatibility = 17
+
+ext {
+    mcVersion = project.property("mcVersion")
+}
+
+group project.property("group")
+
+spigot {
+    name = project.property("pluginName")
+    authors = [project.property("author")]
+    apiVersion = project.property("apiVersion")
+    load = STARTUP
+    // depends = ['']
+    softDepends = ['Vault']
+    excludeLibraries = ['*']
+}
+
+compileJava {
+    options.encoding = 'UTF-8'
+    options.compilerArgs += ["-parameters"]
+    options.fork = true
+    options.forkOptions.executable = 'javac'
+    options.compilerArgs += [
+        '--release', '17',
+        '-Xlint:deprecation'
+    ]
+}
+
+archivesBaseName = project.property("pluginName")
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+    spigot()
+    bungeecord()
+    paper()
+    essentialsX()
+    bStats()
+    enginehub()
+    protocolLib()
+    maven { url = 'https://repo.aikar.co/content/groups/aikar/' }
+    jitpack()
+}
+
+dependencies {
+    // using using paper-api
+    implementation paper(mcVersion)
+
+    // Add your dependencies here
+    // Here are some opinionated dependencies that might help you with your plugin development:
+
+    // Annotation Command Framework: https://github.com/aikar/commands
+    // Use shadow to shade the library into your plugin
+    shadow "co.aikar:acf-paper:0.5.1-SNAPSHOT"
+    // Vault (https://github.com/MilkBowl/VaultAPI) for economy, permissions and chat API
+    // this dependency needs to be present at runtime, meaning Vault.jar needs to be in your plugins folder
+    implementation vaultAll()
+
+    // Test dependencies
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.9.2'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.9.2'
+    testImplementation 'org.mockito:mockito-core:4.11.0'
+    testImplementation 'com.github.seeseemelk:MockBukkit-v1.19:2.144.3'
+    testImplementation 'org.assertj:assertj-core:3.24.1'
+}
+
+shadowJar {
+    classifier = ''
+    configurations = [project.configurations.runtimeClasspath, project.configurations.shadow]
+    relocate 'co.aikar.commands', "${packageName}.acf"
+    relocate 'co.aikar.locales', "${packageName}.locales"
+}
+
+tasks.build.dependsOn(shadowJar)
+tasks.publish.dependsOn(shadowJar)
+tasks.prepareSpigotPlugins.dependsOn(shadowJar)
+
+test {
+    useJUnitPlatform()
+    testLogging {
+        events "skipped", "failed"
+        exceptionFormat = 'full'
+        showStandardStreams = true
+    }
+    
+    // Add this to ensure test dependencies are available
+    systemProperty 'java.class.path', sourceSets.test.runtimeClasspath.asPath
+}
+
+processResources {
+    project.properties.put("version", this.version)
+    expand project.properties
+}
+
+defaultTasks 'build'
